@@ -9,6 +9,20 @@ import os
 import argparse
 from datetime import datetime
 
+def _parse_cookies_str(raw: str) -> dict:
+    """Parse a cookie string like 'a=1,b=2' or 'a=1; b=2' into a dict."""
+    if not raw:
+        return {}
+    cookies = {}
+    for pair in raw.replace(';', ',').split(','):
+        pair = pair.strip()
+        if not pair:
+            continue
+        if '=' in pair:
+            name, value = pair.split('=', 1)
+            cookies[name.strip()] = value.strip()
+    return cookies
+
 def print_banner():
     """Print the scanner banner"""
     print("=" * 60)
@@ -134,7 +148,7 @@ def get_auth_credentials():
         print("No authentication credentials - will attempt unauthenticated scan")
         return {}
 
-def run_scan(target_url, depth, timeout, output_format, auth_credentials=None):
+def run_scan(target_url, depth, timeout, output_format, auth_credentials=None, cookies=None):
     """Run the vulnerability scan"""
     print(f"\nStarting vulnerability scan...")
     print(f"   Target: {target_url}")
@@ -145,6 +159,10 @@ def run_scan(target_url, depth, timeout, output_format, auth_credentials=None):
         print(f"   Authentication: {auth_credentials.get('username', 'Unknown')}")
     else:
         print(f"   Authentication: None")
+    if cookies:
+        print(f"   Cookies: {len(cookies)} provided")
+    else:
+        print("   Cookies: None")
     print()
     
     try:
@@ -157,6 +175,7 @@ def run_scan(target_url, depth, timeout, output_format, auth_credentials=None):
             target_url=target_url,
             max_depth=depth,
             timeout=timeout,
+            cookies=cookies,
             auth_credentials=auth_credentials
         )
         
@@ -262,6 +281,7 @@ def main():
                           help='Output format (default: txt)')
         parser.add_argument('--username', help='Username for authentication')
         parser.add_argument('--password', help='Password for authentication')
+        parser.add_argument('--cookies', help='Cookies as name=value pairs separated by comma or semicolon')
         
         args = parser.parse_args()
         
@@ -271,6 +291,10 @@ def main():
             print(f"Authentication: {args.username}")
         else:
             print(f"Authentication: None")
+        if args.cookies:
+            print(f"Cookies: provided")
+        else:
+            print("Cookies: None")
         print()
         
         # Prepare auth credentials
@@ -278,7 +302,8 @@ def main():
         if args.username and args.password:
             auth_credentials = {'username': args.username, 'password': args.password}
         
-        success = run_scan(args.url, args.depth, args.timeout, args.output, auth_credentials)
+        cookies = _parse_cookies_str(args.cookies) if args.cookies else {}
+        success = run_scan(args.url, args.depth, args.timeout, args.output, auth_credentials, cookies)
         sys.exit(0 if success else 1)
     
     # Interactive mode
@@ -298,6 +323,11 @@ def main():
                 target_url = get_user_input()
                 depth, timeout, output_format = get_scan_options()
                 auth_credentials = get_auth_credentials()
+                # Ask for cookies interactively
+                print("\nCookie Configuration (optional)")
+                print("   Enter cookies as name=value pairs separated by commas or semicolons")
+                raw_cookies = input("Cookies (press Enter to skip): ").strip()
+                cookies = _parse_cookies_str(raw_cookies)
                 
                 print()
                 print("Ready to start scan!")
@@ -306,7 +336,7 @@ def main():
                     print("❌ Scan cancelled")
                     continue
                 
-                success = run_scan(target_url, depth, timeout, output_format, auth_credentials)
+                success = run_scan(target_url, depth, timeout, output_format, auth_credentials, cookies)
                 if success:
                     print("\nScan completed successfully!")
                 
